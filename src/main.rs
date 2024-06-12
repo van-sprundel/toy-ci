@@ -1,53 +1,33 @@
+mod app_state;
+mod build_executor;
+mod events;
+mod git;
+mod running_build;
+mod webhook_payloads;
+
+use app_state::AppState;
 use axum::extract::Path;
 use axum::response::sse::Event;
 use axum::response::Sse;
 use axum::routing::get;
 use axum::{routing::post, Router};
 use axum::{Extension, Json};
-use error::Error;
 use events::actor::{Actor, ActorHandler};
 use events::new_build_message::NewBuildMessage;
 use futures::stream::Stream;
+use merel::Result;
 use running_build::RunningBuild;
-use std::collections::HashMap;
-use std::convert::Infallible;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
-use tokio::sync::{broadcast, mpsc::Receiver, mpsc::Sender, Mutex};
+use tokio::sync::{broadcast, mpsc::Receiver, mpsc::Sender};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use webhook_payloads::github::GithubPushWebhookPayload;
-
-mod build_executor;
-mod error;
-mod events;
-mod git;
-mod running_build;
-mod webhook_payloads;
-
-struct AppState {
-    builds: Mutex<HashMap<String, RunningBuild>>,
-}
-
-impl AppState {
-    pub async fn send_log(&self, build_id: &str, message: &str) -> Result<(), Error> {
-        let mut build_progress_channel_map = self.builds.lock().await;
-
-        if let Some(build) = build_progress_channel_map.get_mut(build_id) {
-            let (tx, _) = &build.channel;
-            tx.send(message.to_string())?;
-
-            build.logs.push(message.to_string());
-        }
-
-        Ok(())
-    }
-}
 
 async fn sse_handler(
     Path(build_id): Path<String>,
     Extension(state): Extension<Arc<AppState>>,
-) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+) -> Sse<impl Stream<Item = Result<Event>>> {
     tracing::info!("Receiving sse event");
 
     let (rx, previous_logs) = {
@@ -106,7 +86,7 @@ async fn webhook_handler(
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Error> {
+async fn main() -> Result<()> {
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer())
         .init();
@@ -114,9 +94,7 @@ async fn main() -> Result<(), Error> {
     let (tx, rx): (Sender<NewBuildMessage>, Receiver<NewBuildMessage>) = mpsc::channel(100);
     let build_queue = ActorHandler::new(tx);
 
-    let app_state = Arc::new(AppState {
-        builds: Mutex::new(HashMap::default()),
-    });
+    let app_state = Arc::new(AppState::default());
 
     let app = Router::new()
         .route("/sse/:build_id", get(sse_handler))

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use tokio::sync::{mpsc, Mutex};
 
-use crate::{build_executor::BuildExecutor, AppState};
+use crate::{app_state::AppState, build_executor::BuildExecutor, Result};
 
 use super::new_build_message::NewBuildMessage;
 
@@ -19,22 +19,25 @@ impl Actor {
             .collect();
 
         while let Some(new_build_message) = self.0.recv().await {
-            let executors = executors.clone();
-            let state_clone = state.clone();
-            let build_id = new_build_message.id.clone();
-            let commit = new_build_message.commit.clone();
+            let build_id = new_build_message.id;
+            let commit = new_build_message.commit;
 
-            tokio::spawn(async move {
-                loop {
-                    for executor in &executors {
-                        let mut executor = executor.lock().await;
-                        if executor.is_available() {
-                            executor.run_build(state_clone, &build_id, commit).await;
-                            return;
-                        }
+            'executor: loop {
+                for executor in &executors {
+                    let mut executor = executor.lock().await;
+
+                    if executor.is_available() {
+                        tracing::trace!("Executor found for build_id: {}", build_id);
+
+                        // we ignore errors here so it can safely stop the loop
+                        let _ = executor
+                            .run_build(state.clone(), &build_id, commit.clone())
+                            .await;
+
+                        break 'executor;
                     }
                 }
-            });
+            }
         }
     }
 }
@@ -47,10 +50,7 @@ impl ActorHandler {
         Self(Arc::new(Mutex::new(tx)))
     }
 
-    pub async fn send(
-        &self,
-        new_build_message: NewBuildMessage,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn send(&self, new_build_message: NewBuildMessage) -> Result<()> {
         let tx = self.0.lock().await;
         tx.send(new_build_message).await?;
         Ok(())
