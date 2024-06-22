@@ -1,7 +1,6 @@
-use crate::git::commit::Commit;
+use crate::build_context::BuildContext;
 
 #[derive(Clone)]
 pub struct NewBuildMessage {
-    pub commit: Commit,
-    pub id: String,
+    pub context: BuildContext,
 }

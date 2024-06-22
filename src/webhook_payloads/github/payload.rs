@@ -6,14 +6,14 @@ pub struct GithubPushWebhookPayload {
     before: String,
     base_ref: Option<String>,
     pub commits: Vec<GithubCommit>,
-    comprase: String,
+    compare: String,
     created: bool,
     deleted: bool,
     forced: bool,
     head_commit: Option<GithubCommit>,
     pusher: GithubUser,
     #[serde(rename = "ref")]
-    reference: String,
-    repository: GithubRepository,
+    pub(crate) reference: String, // ref/heads/main
+    pub(crate) repository: GithubRepository,
     sender: GithubUser,
 }

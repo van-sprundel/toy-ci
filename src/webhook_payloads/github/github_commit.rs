@@ -8,13 +8,13 @@ pub struct GithubCommit {
     author: GithubUser,
     committer: GithubUser,
     distinct: bool,
-    id: String,
+    pub id: String,
     message: String,
     modified: Vec<String>,
     removed: Vec<String>,
     timestamp: String,
     tree_id: String,
-    url: String,
+    pub url: String,
 }
 
 impl From<GithubCommit> for Commit {

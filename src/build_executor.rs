@@ -1,12 +1,10 @@
 use crate::app_state::AppState;
+use crate::build_context::BuildContext;
 use crate::Result;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::fs;
 use tokio::process::Command as TokioCommand;
-
-use crate::git::commit::Commit;
 
 pub struct BuildExecutor {
     available: AtomicBool,
@@ -23,38 +21,29 @@ impl BuildExecutor {
         self.available.load(Ordering::SeqCst)
     }
 
-    pub async fn run_build(
-        &mut self,
-        state: Arc<AppState>,
-        build_id: &str,
-        commit: Commit,
-    ) -> Result<()> {
-        tracing::info!("Building from new commit {build_id}");
+    pub async fn run_build(&mut self, state: Arc<AppState>, context: BuildContext) -> Result<()> {
+        tracing::info!("Building from new commit {}", context.id);
+        let repo_url = context.repo_url;
+        let repo_dir = context.repo_dir;
+        let commit_id = context.commit_id;
 
         self.available.store(false, Ordering::SeqCst);
 
         let result = async {
-            let repo_url = &commit.url;
-            let commit_id = &commit.id;
-            let repo_dir = format!("/tmp/repo-{}", commit_id);
-
-            fs::create_dir_all(&repo_dir).await?;
-            state.send_log(build_id, "Created repo directory").await?;
-
             self.run_command(
                 &state,
-                build_id,
+                &context.id,
                 "git",
-                Some(vec!["clone", repo_url, &repo_dir]),
+                Some(vec!["clone", &repo_url, &repo_dir]),
                 None,
             )
             .await?;
 
             self.run_command(
                 &state,
-                build_id,
+                &context.id,
                 "git",
-                Some(vec!["checkout", commit_id]),
+                Some(vec!["checkout", &commit_id]),
                 Some(&repo_dir),
             )
             .await?;
@@ -96,7 +85,9 @@ impl BuildExecutor {
 
         if !output.status.success() {
             tracing::error!("Error: {:?}", &output_string);
+
             state.send_log(build_id, &output_string).await?;
+
             self.available.store(true, Ordering::SeqCst);
             return Err(
                 merel::MerelError::CommandFailed(command.to_string(), output_string).into(),

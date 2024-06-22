@@ -1,13 +1,15 @@
 use std::collections::HashMap;
 
 use futures::lock::Mutex;
+use tokio::process::Command;
 
+use crate::build_context::BuildContext;
 use crate::running_build::RunningBuild;
 use crate::Result;
 
 #[derive(Default)]
 pub struct AppState {
-    pub builds: Mutex<HashMap<String, RunningBuild>>,
+    builds: Mutex<HashMap<String, RunningBuild>>,
 }
 
 impl AppState {
@@ -22,5 +24,43 @@ impl AppState {
         }
 
         Ok(())
+    }
+
+    pub async fn create_build(&self, id: &str) {
+        let (tx, rx) = tokio::sync::broadcast::channel(100);
+
+        self.builds
+            .lock()
+            .await
+            .insert(id.to_string(), RunningBuild::new((tx, rx)));
+    }
+
+    pub fn get_builds(&self) -> &Mutex<HashMap<String, RunningBuild>> {
+        &self.builds
+    }
+
+    pub async fn create_git_directory_if_not_exists(&self, context: &BuildContext) -> Result<()> {
+        let path = std::path::Path::new(&context.repo_dir);
+        if path.exists() {
+            return Ok(());
+        }
+
+        std::fs::create_dir_all(path)?;
+
+        self.send_log(
+            &context.id,
+            &format!("Cloning {} into {}", context.repo_url, context.repo_dir),
+        )
+        .await?;
+
+        let output = Command::new("git")
+            .args(["clone", &context.repo_url, &context.repo_dir])
+            .output()
+            .await;
+
+        match output {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e.into()),
+        }
     }
 }
