@@ -20,7 +20,9 @@ use events::actor::{Actor, ActorHandler};
 use events::new_build_message::NewBuildMessage;
 use futures::stream::Stream;
 use git::commit::Commit;
-use merel::{MerelError, Result};
+use merel_core::error::{MerelError, Result};
+use merel_core::pipeline::Pipeline;
+use merel_pipeline_parser::PipelineParser;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
@@ -85,15 +87,15 @@ async fn process_commit(
     payload: &GithubPushWebhookPayload,
     commit: Commit,
 ) {
-    let build_id = Uuid::new_v4();
-    println!("Build context {build_id} created");
+    let build_id = Uuid::new_v4().to_string();
+    tracing::info!("Build context {build_id} created");
 
     let repository_name = payload.repository.name.clone();
     let url = payload.repository.url.clone();
     let repo_dir = format!("/tmp/merel/{}-{}", repository_name, commit.id);
 
     let context = BuildContext {
-        id: build_id.to_string(),
+        id: build_id.clone(),
         commit_id: commit.id,
         repo_url: url,
         repo_dir,
@@ -101,6 +103,8 @@ async fn process_commit(
 
     let output = state.create_git_directory_if_not_exists(&context).await;
     if let Err(e) = output {
+        state.send_log(&build_id, &e.to_string()).await;
+
         let span = tracing::error_span!("Can't create git repository");
         span.in_scope(|| {
             tracing::error!("{e}");
@@ -119,6 +123,8 @@ async fn process_commit(
     )
     .await;
     if let Err(e) = checkout {
+        state.send_log(&build_id, &e.to_string()).await;
+
         let span = tracing::error_span!("Can't checkout repository");
         span.in_scope(|| {
             tracing::error!("{e}");
@@ -131,6 +137,8 @@ async fn process_commit(
     let pipeline = match get_pipeline(&context).await {
         Ok(v) => v,
         Err(e) => {
+            state.send_log(&build_id, &e.to_string()).await;
+
             let span = tracing::error_span!("Can't retrieve pipeline");
             span.in_scope(|| {
                 tracing::error!("{e}");
@@ -140,6 +148,7 @@ async fn process_commit(
         }
     };
 
+    // TODO: replace with actual branch
     if !pipeline.should_trigger("main") {
         return;
     }
@@ -154,16 +163,6 @@ async fn process_commit(
     let _ = build_queue.send(message).await;
 }
 
-struct Pipeline {
-    trigger_branch: String,
-}
-
-impl Pipeline {
-    pub fn should_trigger(&self, current_branch: &str) -> bool {
-        self.trigger_branch == current_branch
-    }
-}
-
 async fn get_pipeline(context: &BuildContext) -> Result<Pipeline> {
     let repo_dir = &context.repo_dir;
     let path = std::path::Path::new(&repo_dir.clone()).join("Merelfile");
@@ -172,10 +171,16 @@ async fn get_pipeline(context: &BuildContext) -> Result<Pipeline> {
         return Err(MerelError::PipelineRetrieveError(repo_dir.to_string()).into());
     }
 
+    let content = match std::fs::read_to_string(&path) {
+        Ok(v) => v,
+        Err(_) => {
+            return Err(MerelError::PipelineRetrieveError(repo_dir.to_string()).into());
+        }
+    };
+
     // parse pipeline
-    Ok(Pipeline {
-        trigger_branch: "main".to_string(),
-    })
+    let pipeline_parser = PipelineParser::new(&content);
+    pipeline_parser.parse()
 }
 
 #[tokio::main]

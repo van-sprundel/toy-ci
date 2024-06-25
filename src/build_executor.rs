@@ -35,7 +35,7 @@ impl BuildExecutor {
         }
         .await;
 
-        state.send_log(&context.id, "Finished building!").await?;
+        state.send_log(&context.id, "Finished building!").await;
 
         self.available.store(true, Ordering::SeqCst);
 

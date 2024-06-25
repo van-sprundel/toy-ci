@@ -471,11 +471,12 @@ checksum = "6c8640c5d730cb13ebd907d8d04b52f55ac9a2eec55b440c8892f40d56c76c1d"
 name = "merel"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "async-stream",
  "axum",
  "dashmap",
  "futures",
+ "merel-core",
+ "merel-pipeline-parser",
  "serde",
  "serde_json",
  "thiserror",
@@ -484,6 +485,23 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+]
+
+[[package]]
+name = "merel-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "thiserror",
+]
+
+[[package]]
+name = "merel-pipeline-parser"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "merel-core",
+ "thiserror",
 ]
 
 [[package]]

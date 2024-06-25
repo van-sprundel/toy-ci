@@ -13,17 +13,16 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub async fn send_log(&self, build_id: &str, message: &str) -> Result<()> {
+    pub async fn send_log(&self, build_id: &str, message: &str) {
         let mut build_progress_channel_map = self.builds.lock().await;
 
         if let Some(build) = build_progress_channel_map.get_mut(build_id) {
             let (tx, _) = &build.channel;
-            tx.send(message.to_string())?;
+            tx.send(message.to_string())
+                .expect("Cant send message to channel");
 
             build.logs.push(message.to_string());
         }
-
-        Ok(())
     }
 
     pub async fn create_build(&self, id: &str) {
@@ -51,7 +50,7 @@ impl AppState {
             &context.id,
             &format!("Cloning {} into {}", context.repo_url, context.repo_dir),
         )
-        .await?;
+        .await;
 
         let output = Command::new("git")
             .args(["clone", &context.repo_url, &context.repo_dir])

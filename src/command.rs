@@ -1,4 +1,5 @@
-use merel::Result;
+use merel_core::error::MerelError;
+use merel_core::error::Result;
 use std::sync::Arc;
 use tokio::process::Command as TokioCommand;
 
@@ -25,14 +26,12 @@ pub async fn run_command(
     let output_string = String::from_utf8(output.stderr)?;
 
     if !output.status.success() {
-        tracing::error!("Error: {:?}", &output_string);
+        state.send_log(build_id, &output_string).await;
 
-        state.send_log(build_id, &output_string).await?;
-
-        return Err(merel::MerelError::CommandFailed(command.to_string(), output_string).into());
+        return Err(MerelError::CommandFailed(command.to_string(), output_string).into());
     }
 
-    state.send_log(build_id, command).await?;
+    state.send_log(build_id, command).await;
 
     Ok(())
 }
