@@ -1,5 +1,5 @@
-use merel_core::error::MerelError;
-use merel_core::error::Result;
+use crate::error::MerelError;
+use crate::error::Result;
 use std::sync::Arc;
 use tokio::process::Command as TokioCommand;
 

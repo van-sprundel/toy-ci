@@ -5,7 +5,7 @@
     "commits": [
         {
             "added": [
-                "Merelfile"
+                "merel.yaml"
             ],
             "author": {
                 "date": "2024-01-01T00:00:00Z",
@@ -20,7 +20,7 @@
                 "username": "committer_login"
             },
             "distinct": true,
-            "id": "cc4ca01bba7abd9e93ac42b61bc5414371eadaa6",
+            "id": "d925207cfaa7ecdb0d98bb890a98038ee31e9bbd",
             "message": "Commitmessage",
             "modified": [
                 "file2.txt"
@@ -28,7 +28,7 @@
             "removed": [],
             "timestamp": "2024-01-01T00:00:00Z",
             "tree_id": "abc123",
-            "url": "https://github.com/van-sprundel/merel-test-repository/commit/cc4ca01bba7abd9e93ac42b61bc5414371eadaa6"
+            "url": "https://github.com/van-sprundel/merel-test-repository/commit/d925207cfaa7ecdb0d98bb890a98038ee31e9bbd"
         },
         {
             "added": [

@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use futures::lock::Mutex;
 use tokio::process::Command;
 
-use crate::build_context::BuildContext;
 use crate::running_build::RunningBuild;
+use crate::workspace_context::WorkspaceContext;
 use crate::Result;
 
 #[derive(Default)]
@@ -38,7 +38,10 @@ impl AppState {
         &self.builds
     }
 
-    pub async fn create_git_directory_if_not_exists(&self, context: &BuildContext) -> Result<()> {
+    pub async fn create_git_directory_if_not_exists(
+        &self,
+        context: &WorkspaceContext,
+    ) -> Result<()> {
         let path = std::path::Path::new(&context.repo_dir);
         if path.exists() {
             return Ok(());

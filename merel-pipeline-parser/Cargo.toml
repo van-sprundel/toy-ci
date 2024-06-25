@@ -1,9 +1,0 @@
-[package]
-name = "merel-pipeline-parser"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-anyhow = "1.0.86"
-merel-core = { path = "../merel-core" }
-thiserror = "1.0.61"

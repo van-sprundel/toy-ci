@@ -1,6 +1,9 @@
-use crate::build_context::BuildContext;
+use crate::pipeline::Pipeline;
+
+use crate::workspace_context::WorkspaceContext;
 
 #[derive(Clone)]
 pub struct NewBuildMessage {
-    pub context: BuildContext,
+    pub context: WorkspaceContext,
+    pub pipeline: Pipeline,
 }

@@ -1,11 +1,15 @@
 mod app_state;
-mod build_context;
 mod build_executor;
 mod command;
+mod error;
 mod events;
 mod git;
+mod job;
+mod step;
+mod pipeline;
 mod running_build;
 mod webhook_payloads;
+mod workspace_context;
 
 use app_state::AppState;
 use axum::extract::Path;
@@ -14,15 +18,13 @@ use axum::response::Sse;
 use axum::routing::get;
 use axum::{routing::post, Router};
 use axum::{Extension, Json};
-use build_context::BuildContext;
 use command::run_command;
+use error::{MerelError, Result};
 use events::actor::{Actor, ActorHandler};
 use events::new_build_message::NewBuildMessage;
 use futures::stream::Stream;
 use git::commit::Commit;
-use merel_core::error::{MerelError, Result};
-use merel_core::pipeline::Pipeline;
-use merel_pipeline_parser::pipeline_parser::PipelineParser;
+use pipeline::Pipeline;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
@@ -30,6 +32,7 @@ use tokio::sync::{mpsc::Receiver, mpsc::Sender};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use uuid::Uuid;
 use webhook_payloads::github::GithubPushWebhookPayload;
+use workspace_context::WorkspaceContext;
 
 async fn sse_handler(
     Path(build_id): Path<String>,
@@ -94,7 +97,7 @@ async fn process_commit(
     let url = payload.repository.url.clone();
     let repo_dir = format!("/tmp/merel/{}-{}", repository_name, commit.id);
 
-    let context = BuildContext {
+    let context = WorkspaceContext {
         id: build_id.clone(),
         commit_id: commit.id,
         repo_url: url,
@@ -156,13 +159,13 @@ async fn process_commit(
 
     state.create_build(&context.id).await;
 
-    let message = NewBuildMessage { context };
+    let message = NewBuildMessage { context, pipeline };
     let _ = build_queue.send(message).await;
 }
 
-async fn get_pipeline(context: &BuildContext) -> Result<Pipeline> {
+async fn get_pipeline(context: &WorkspaceContext) -> Result<Pipeline> {
     let repo_dir = &context.repo_dir;
-    let path = std::path::Path::new(&repo_dir.clone()).join("Merelfile");
+    let path = std::path::Path::new(&repo_dir.clone()).join("merel.yaml");
 
     if !path.exists() {
         return Err(MerelError::PipelineRetrieveError(repo_dir.to_string()).into());
@@ -176,8 +179,7 @@ async fn get_pipeline(context: &BuildContext) -> Result<Pipeline> {
     };
 
     // parse pipeline
-    let pipeline_parser = PipelineParser::new(&content);
-    pipeline_parser.parse()
+    serde_yaml::from_str::<Pipeline>(&content).map_err(|e| e.into())
 }
 
 #[tokio::main]
