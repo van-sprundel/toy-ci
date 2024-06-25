@@ -22,7 +22,7 @@ use futures::stream::Stream;
 use git::commit::Commit;
 use merel_core::error::{MerelError, Result};
 use merel_core::pipeline::Pipeline;
-use merel_pipeline_parser::PipelineParser;
+use merel_pipeline_parser::pipeline_parser::PipelineParser;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
@@ -150,12 +150,9 @@ async fn process_commit(
 
     // TODO: replace with actual branch
     if !pipeline.should_trigger("main") {
+        tracing::debug!("No trigger needed.");
         return;
     }
-
-    // if it can parse, check if it should trigger the current branch,
-
-    // if so then start build
 
     state.create_build(&context.id).await;
 

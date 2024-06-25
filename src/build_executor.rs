@@ -21,7 +21,7 @@ impl BuildExecutor {
     }
 
     pub async fn run_build(&mut self, state: Arc<AppState>, context: BuildContext) -> Result<()> {
-        tracing::info!("Building from new commit {}", context.id);
+        tracing::info!("Building from new workspace {}", context.id);
 
         self.available.store(false, Ordering::SeqCst);
 
@@ -35,7 +35,7 @@ impl BuildExecutor {
         }
         .await;
 
-        state.send_log(&context.id, "Finished building!").await;
+        tracing::info!("Finished building from workspace {}", context.id);
 
         self.available.store(true, Ordering::SeqCst);
 

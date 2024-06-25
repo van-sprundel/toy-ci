@@ -26,7 +26,7 @@ impl Actor {
                     let mut executor = executor.lock().await;
 
                     if executor.is_available() {
-                        tracing::trace!("Executor found for build_id: {}", &context.id);
+                        tracing::debug!("Executor found for build_id: {}", &context.id);
 
                         // we ignore errors here so it can safely stop the loop
                         let _ = executor.run_build(state.clone(), context.clone()).await;
