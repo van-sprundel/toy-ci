@@ -5,7 +5,7 @@
     "commits": [
         {
             "added": [
-                "file1.txt"
+                "Merelfile"
             ],
             "author": {
                 "date": "2024-01-01T00:00:00Z",
@@ -20,7 +20,7 @@
                 "username": "committer_login"
             },
             "distinct": true,
-            "id": "2c5d9d8d43a1b2d0e3a24c20c7d4b5e6d7e8f9a0",
+            "id": "cc4ca01bba7abd9e93ac42b61bc5414371eadaa6",
             "message": "Commitmessage",
             "modified": [
                 "file2.txt"
@@ -28,7 +28,7 @@
             "removed": [],
             "timestamp": "2024-01-01T00:00:00Z",
             "tree_id": "abc123",
-            "url": "https://github.com/repo/commit/2c5d9d8d43a1b2d0e3a24c40c7d4b5e6d7e8f9a0"
+            "url": "https://github.com/van-sprundel/merel-test-repository/commit/cc4ca01bba7abd9e93ac42b61bc5414371eadaa6"
         },
         {
             "added": [
@@ -47,7 +47,7 @@
                 "username": "committer_login"
             },
             "distinct": true,
-            "id": "2c5d9d8d43a1b2d0e3a22c40c7d4b5e6d7e8f9a0",
+            "id": "c2ee2a705a404a237dec08144eb17b10fb5f4e79",
             "message": "Commitmessage",
             "modified": [
                 "file2.txt"
@@ -55,7 +55,7 @@
             "removed": [],
             "timestamp": "2024-01-01T00:00:00Z",
             "tree_id": "abc123",
-            "url": "https://github.com/repo/commit/2c5d9d8d43a1b2d0e3a24c40c7d4b5e6d7e8f9a0"
+            "url": "https://github.com/van-sprundel/merel-test-repository/commit/c2ee2a705a404a237dec08144eb17b10fb5f4e79"
         }
     ],
     "compare": "some_compare",
@@ -72,8 +72,8 @@
     "repository": {
         "id": 123456,
         "node_id": "MDEwOlJlcG9zaXRvcnkxMjM0NTY=",
-        "name": "example-repo",
-        "full_name": "example_user/example-repo",
+        "name": "merel-test-repository",
+        "full_name": "van-sprundel/merel-test-repository ",
         "private": false,
         "owner": {
             "login": "example_user",
@@ -87,7 +87,7 @@
         },
         "description": "Anexamplerepository",
         "fork": false,
-        "url": "https://github.com/van-sprundel/check-buddy.git"
+        "url": "https://github.com/van-sprundel/merel-test-repository.git"
     },
     "sender": {
         "date": "2024-01-01T00:00:00Z",

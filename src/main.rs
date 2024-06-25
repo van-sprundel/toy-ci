@@ -1,6 +1,7 @@
 mod app_state;
 mod build_context;
 mod build_executor;
+mod command;
 mod events;
 mod git;
 mod running_build;
@@ -14,14 +15,14 @@ use axum::routing::get;
 use axum::{routing::post, Router};
 use axum::{Extension, Json};
 use build_context::BuildContext;
+use command::run_command;
 use events::actor::{Actor, ActorHandler};
 use events::new_build_message::NewBuildMessage;
 use futures::stream::Stream;
 use git::commit::Commit;
-use merel::Result;
+use merel::{MerelError, Result};
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use tokio::process::Command;
 use tokio::sync::mpsc;
 use tokio::sync::{mpsc::Receiver, mpsc::Sender};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -108,11 +109,15 @@ async fn process_commit(
         return;
     }
 
-    let checkout = Command::new("git")
-        .arg0("checkout")
-        .current_dir(&context.repo_dir)
-        .output()
-        .await;
+    // checkout git
+    let checkout = run_command(
+        state,
+        &build_id.to_string(),
+        "git",
+        Some(vec!["checkout", &context.commit_id]),
+        Some(&context.repo_dir),
+    )
+    .await;
     if let Err(e) = checkout {
         let span = tracing::error_span!("Can't checkout repository");
         span.in_scope(|| {
@@ -121,13 +126,24 @@ async fn process_commit(
 
         return;
     }
-    return;
 
     // get pipeline in curr build
+    let pipeline = match get_pipeline(&context).await {
+        Ok(v) => v,
+        Err(e) => {
+            let span = tracing::error_span!("Can't retrieve pipeline");
+            span.in_scope(|| {
+                tracing::error!("{e}");
+            });
 
-    // parse pipeline
+            return;
+        }
+    };
 
-    // if it can't be parsed then return build state CantParse
+    if !pipeline.should_trigger("main") {
+        return;
+    }
+
     // if it can parse, check if it should trigger the current branch,
 
     // if so then start build
@@ -136,6 +152,30 @@ async fn process_commit(
 
     let message = NewBuildMessage { context };
     let _ = build_queue.send(message).await;
+}
+
+struct Pipeline {
+    trigger_branch: String,
+}
+
+impl Pipeline {
+    pub fn should_trigger(&self, current_branch: &str) -> bool {
+        self.trigger_branch == current_branch
+    }
+}
+
+async fn get_pipeline(context: &BuildContext) -> Result<Pipeline> {
+    let repo_dir = &context.repo_dir;
+    let path = std::path::Path::new(&repo_dir.clone()).join("Merelfile");
+
+    if !path.exists() {
+        return Err(MerelError::PipelineRetrieveError(repo_dir.to_string()).into());
+    }
+
+    // parse pipeline
+    Ok(Pipeline {
+        trigger_branch: "main".to_string(),
+    })
 }
 
 #[tokio::main]
