@@ -34,7 +34,7 @@ impl AppState {
             .insert(id.to_string(), RunningBuild::new(id, (tx, rx)));
     }
 
-    pub fn get_workspace(&self) -> &Mutex<HashMap<String, RunningBuild>> {
+    pub fn get_workspaces(&self) -> &Mutex<HashMap<String, RunningBuild>> {
         &self.builds
     }
 

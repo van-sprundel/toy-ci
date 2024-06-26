@@ -4,6 +4,7 @@ mod command;
 mod error;
 mod events;
 mod git;
+mod handlers;
 mod job;
 mod pipeline;
 mod prelude;
@@ -12,189 +13,23 @@ mod step;
 mod webhook_payloads;
 mod workspace_context;
 
+use std::sync::Arc;
+
 use app_state::AppState;
-use axum::extract::Path;
-use axum::response::sse::Event;
-use axum::response::Sse;
-use axum::routing::get;
-use axum::{routing::post, Router};
-use axum::{Extension, Json};
-use command::run_command;
+use axum::Extension;
+use axum::{
+    routing::{get, post, put},
+    Router,
+};
 pub use error::*;
 use events::actor::{Actor, ActorHandler};
-use events::new_build_message::NewBuildMessage;
-use futures::stream::Stream;
-use git::commit::Commit;
-use pipeline::Pipeline;
-use prelude::LOGS_DIR;
-use std::sync::Arc;
+use events::build_message::BuildMessage;
+use handlers::*;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 use tokio::sync::{mpsc::Receiver, mpsc::Sender};
 use tower_http::services::ServeDir;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use uuid::Uuid;
-use webhook_payloads::github::GithubPushWebhookPayload;
-use workspace_context::WorkspaceContext;
-
-async fn sse_handler(
-    Path(workspace_id): Path<String>,
-    Extension(state): Extension<Arc<AppState>>,
-) -> Sse<impl Stream<Item = Result<Event>>> {
-    tracing::info!("Receiving sse event");
-
-    let (rx, mut previous_logs) = {
-        let workspaces = state.get_workspace();
-        if let Some(workspace) = workspaces.lock().await.get(&workspace_id) {
-            let rx = workspace.channel.0.subscribe();
-            let previous_logs = workspace.logs.clone();
-
-            (Some(rx), previous_logs)
-        } else {
-            (None, vec![])
-        }
-    };
-
-    // check for log file and add contents to previous_logs if it exists
-    let log_path = format!("{}/{}-logs.txt", LOGS_DIR, workspace_id);
-    if std::path::Path::new(&log_path).exists() {
-        match std::fs::read_to_string(&log_path) {
-            Ok(contents) => previous_logs.push(contents),
-            Err(e) => {
-                tracing::error!("Failed to read log file: {}", e);
-            }
-        }
-    }
-
-    let stream = async_stream::stream! {
-        for log in previous_logs {
-            yield Ok(Event::default().data(log));
-        }
-
-        if let Some(mut rx) = rx {
-            while let Ok(message) = rx.recv().await {
-                yield Ok(Event::default().data(message));
-            }
-        } else {
-            yield Ok(Event::default().data("No events found for this repository"));
-        }
-    };
-
-    Sse::new(stream)
-}
-
-async fn webhook_handler(
-    Extension(build_queue): Extension<ActorHandler>,
-    Extension(state): Extension<Arc<AppState>>,
-    Json(payload): Json<GithubPushWebhookPayload>,
-) -> Json<()> {
-    tracing::info!("Received webhook");
-
-    for commit in &payload.commits {
-        let commit: Commit = commit.clone().into();
-        process_commit(&build_queue, &state, &payload, commit).await;
-    }
-
-    Json(())
-}
-
-async fn process_commit(
-    build_queue: &ActorHandler,
-    state: &Arc<AppState>,
-    payload: &GithubPushWebhookPayload,
-    commit: Commit,
-) {
-    let workspace_id = Uuid::new_v4().to_string();
-    tracing::info!("Workspace {workspace_id} created");
-
-    let repository_name = payload.repository.name.clone();
-    let url = payload.repository.url.clone();
-    let repo_dir = format!("/tmp/merel/repositories/{}-{}", repository_name, commit.id);
-
-    let context = WorkspaceContext {
-        id: workspace_id.clone(),
-        commit_id: commit.id,
-        repo_url: url,
-        repo_dir,
-    };
-
-    let output = state.create_git_directory_if_not_exists(&context).await;
-    if let Err(e) = output {
-        state.send_log(&workspace_id, &e.to_string()).await;
-
-        let span = tracing::error_span!("Can't create git repository");
-        span.in_scope(|| {
-            tracing::error!("{e}");
-        });
-
-        return;
-    }
-
-    // checkout git
-    let checkout = run_command(
-        state,
-        &workspace_id.to_string(),
-        "git",
-        Some(vec!["checkout", &context.commit_id]),
-        Some(&context.repo_dir),
-    )
-    .await;
-    if let Err(e) = checkout {
-        state.send_log(&workspace_id, &e.to_string()).await;
-
-        let span = tracing::error_span!("Can't checkout repository");
-        span.in_scope(|| {
-            tracing::error!("{e}");
-        });
-
-        return;
-    }
-
-    // get pipeline in curr workspace
-    let pipeline = match get_pipeline(&context).await {
-        Ok(v) => v,
-        Err(e) => {
-            state.send_log(&workspace_id, &e.to_string()).await;
-
-            let span = tracing::error_span!("Can't retrieve pipeline");
-            span.in_scope(|| {
-                tracing::error!("{e}");
-            });
-
-            return;
-        }
-    };
-
-    // TODO: replace with actual branch
-    if !pipeline.should_trigger("main") {
-        tracing::debug!("No trigger needed.");
-        return;
-    }
-
-    state.create_workspace(&context.id).await;
-
-    let message = NewBuildMessage { context, pipeline };
-    let _ = build_queue.send(message).await;
-}
-
-async fn get_pipeline(context: &WorkspaceContext) -> Result<Pipeline> {
-    let repo_dir = &context.repo_dir;
-    let path = std::path::Path::new(&repo_dir.clone()).join("merel.yaml");
-
-    if !path.exists() {
-        return Err(MerelError::PipelineRetrieveError(repo_dir.to_string()).into());
-    }
-
-    let content = match std::fs::read_to_string(&path) {
-        Ok(v) => v,
-        Err(_) => {
-            return Err(MerelError::PipelineRetrieveError(repo_dir.to_string()).into());
-        }
-    };
-
-    // parse pipeline
-    serde_yaml::from_str::<Pipeline>(&content).map_err(|e| e.into())
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -202,15 +37,19 @@ async fn main() -> Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let (tx, rx): (Sender<NewBuildMessage>, Receiver<NewBuildMessage>) = mpsc::channel(100);
+    let (tx, rx): (Sender<BuildMessage>, Receiver<BuildMessage>) = mpsc::channel(100);
     let build_queue = ActorHandler::new(tx);
 
     let app_state = Arc::new(AppState::default());
     let static_files = ServeDir::new("dist");
 
     let app = Router::new()
-        .route("/sse/:workspace_id", get(sse_handler))
-        .route("/build", post(webhook_handler))
+        .route("/builds/:build_id/sse", get(build_sse_handler))
+        .route("/builds/:build_id/cancel", put(cancel_build_handler))
+        .route(
+            "/workspaces/:workspace_id/build",
+            post(workspace_build_handler),
+        )
         .layer(Extension(app_state.clone()))
         .layer(Extension(build_queue))
         .fallback_service(static_files.clone());
