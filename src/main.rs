@@ -36,16 +36,16 @@ use webhook_payloads::github::GithubPushWebhookPayload;
 use workspace_context::WorkspaceContext;
 
 async fn sse_handler(
-    Path(build_id): Path<String>,
+    Path(workspace_id): Path<String>,
     Extension(state): Extension<Arc<AppState>>,
 ) -> Sse<impl Stream<Item = Result<Event>>> {
     tracing::info!("Receiving sse event");
 
     let (rx, previous_logs) = {
-        let builds = state.get_builds();
-        if let Some(build) = builds.lock().await.get(&build_id) {
-            let rx = build.channel.0.subscribe();
-            let previous_logs = build.logs.clone();
+        let workspaces = state.get_workspace();
+        if let Some(workspace) = workspaces.lock().await.get(&workspace_id) {
+            let rx = workspace.channel.0.subscribe();
+            let previous_logs = workspace.logs.clone();
 
             (Some(rx), previous_logs)
         } else {
@@ -91,15 +91,15 @@ async fn process_commit(
     payload: &GithubPushWebhookPayload,
     commit: Commit,
 ) {
-    let build_id = Uuid::new_v4().to_string();
-    tracing::info!("Build context {build_id} created");
+    let workspace_id = Uuid::new_v4().to_string();
+    tracing::info!("Workspace {workspace_id} created");
 
     let repository_name = payload.repository.name.clone();
     let url = payload.repository.url.clone();
-    let repo_dir = format!("/tmp/merel/{}-{}", repository_name, commit.id);
+    let repo_dir = format!("/tmp/merel/repositories/{}-{}", repository_name, commit.id);
 
     let context = WorkspaceContext {
-        id: build_id.clone(),
+        id: workspace_id.clone(),
         commit_id: commit.id,
         repo_url: url,
         repo_dir,
@@ -107,7 +107,7 @@ async fn process_commit(
 
     let output = state.create_git_directory_if_not_exists(&context).await;
     if let Err(e) = output {
-        state.send_log(&build_id, &e.to_string()).await;
+        state.send_log(&workspace_id, &e.to_string()).await;
 
         let span = tracing::error_span!("Can't create git repository");
         span.in_scope(|| {
@@ -120,14 +120,14 @@ async fn process_commit(
     // checkout git
     let checkout = run_command(
         state,
-        &build_id.to_string(),
+        &workspace_id.to_string(),
         "git",
         Some(vec!["checkout", &context.commit_id]),
         Some(&context.repo_dir),
     )
     .await;
     if let Err(e) = checkout {
-        state.send_log(&build_id, &e.to_string()).await;
+        state.send_log(&workspace_id, &e.to_string()).await;
 
         let span = tracing::error_span!("Can't checkout repository");
         span.in_scope(|| {
@@ -137,11 +137,11 @@ async fn process_commit(
         return;
     }
 
-    // get pipeline in curr build
+    // get pipeline in curr workspace
     let pipeline = match get_pipeline(&context).await {
         Ok(v) => v,
         Err(e) => {
-            state.send_log(&build_id, &e.to_string()).await;
+            state.send_log(&workspace_id, &e.to_string()).await;
 
             let span = tracing::error_span!("Can't retrieve pipeline");
             span.in_scope(|| {
@@ -158,7 +158,7 @@ async fn process_commit(
         return;
     }
 
-    state.create_build(&context.id).await;
+    state.create_workspace(&context.id).await;
 
     let message = NewBuildMessage { context, pipeline };
     let _ = build_queue.send(message).await;
@@ -196,7 +196,7 @@ async fn main() -> Result<()> {
     let static_files = ServeDir::new("dist");
 
     let app = Router::new()
-        .route("/sse/:build_id", get(sse_handler))
+        .route("/sse/:workspace_id", get(sse_handler))
         .route("/build", post(webhook_handler))
         .layer(Extension(app_state.clone()))
         .layer(Extension(build_queue))

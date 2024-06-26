@@ -23,7 +23,7 @@ impl BuildExecutor {
 
     pub async fn run_build(
         &mut self,
-        _state: Arc<AppState>,
+        state: Arc<AppState>,
         context: WorkspaceContext,
         pipeline: Pipeline,
     ) -> Result<()> {
@@ -31,9 +31,13 @@ impl BuildExecutor {
 
         self.available.store(false, Ordering::SeqCst);
 
-        let result = pipeline.run().await;
+        let result = pipeline.run(&state, &context).await;
 
         tracing::info!("Finished building from workspace {}", context.id);
+        
+        if let Some(running_build) = state.pop_build(&context.id).await {
+            running_build.store_logs()?;
+        }
 
         self.available.store(true, Ordering::SeqCst);
 

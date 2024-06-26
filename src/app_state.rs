@@ -21,21 +21,26 @@ impl AppState {
             tx.send(message.to_string())
                 .expect("Cant send message to channel");
 
-            build.logs.push(message.to_string());
+            build.logs.push(message.to_string()); // this should be replaced with a persisent log
         }
     }
 
-    pub async fn create_build(&self, id: &str) {
+    pub async fn create_workspace(&self, id: &str) {
         let (tx, rx) = tokio::sync::broadcast::channel(100);
 
         self.builds
             .lock()
             .await
-            .insert(id.to_string(), RunningBuild::new((tx, rx)));
+            .insert(id.to_string(), RunningBuild::new(id, (tx, rx)));
     }
 
-    pub fn get_builds(&self) -> &Mutex<HashMap<String, RunningBuild>> {
+    pub fn get_workspace(&self) -> &Mutex<HashMap<String, RunningBuild>> {
         &self.builds
+    }
+
+    pub async fn pop_build(&self, id: &str) -> Option<RunningBuild> {
+        let mut builds = self.builds.lock().await;
+        builds.remove(id)
     }
 
     pub async fn create_git_directory_if_not_exists(
