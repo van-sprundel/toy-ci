@@ -1,15 +1,25 @@
 services:
+  database:
+    image: postgres
+    restart: always
+    shm_size: 128mb
+    environment:
+      POSTGRES_PASSWORD: password
+
   backend:
     build:
       context: .
       dockerfile: Dockerfile
+    command: sh -c "cargo watch -i dashboard -c -x run"
     ports:
       - "3000:3000"
     depends_on:
+      - database
       - frontend
     volumes:
       - .:/app
       - /app/target
+    tty: true
 
   frontend:
     build:
@@ -21,3 +31,4 @@ services:
       - ./dashboard:/app
     environment:
       - CHOKIDAR_USEPOLLING=true
+    tty: true

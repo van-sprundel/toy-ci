@@ -1,14 +1,14 @@
-FROM rust:latest as build
+FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
 WORKDIR /app
 
-COPY . /app
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
 
-RUN cargo build
+FROM chef AS builder 
+COPY --from=planner /app/recipe.json recipe.json
 
-FROM gcr.io/distroless/cc-debian12 as run
-COPY --from=build /app/target/debug/merel /
+# add --release for release build, not needed now.
+RUN cargo chef cook --recipe-path recipe.json 
 
-EXPOSE 3000
-
-CMD ["./merel"]
-
+RUN cargo install --locked cargo-watch
