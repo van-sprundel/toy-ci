@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use futures::lock::Mutex;
 use tokio::process::Command;
 
-use crate::build_context::BuildContext;
 use crate::running_build::RunningBuild;
+use crate::workspace_context::WorkspaceContext;
 use crate::Result;
 
 #[derive(Default)]
@@ -13,17 +13,16 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub async fn send_log(&self, build_id: &str, message: &str) -> Result<()> {
+    pub async fn send_log(&self, build_id: &str, message: &str) {
         let mut build_progress_channel_map = self.builds.lock().await;
 
         if let Some(build) = build_progress_channel_map.get_mut(build_id) {
             let (tx, _) = &build.channel;
-            tx.send(message.to_string())?;
+            tx.send(message.to_string())
+                .expect("Cant send message to channel");
 
             build.logs.push(message.to_string());
         }
-
-        Ok(())
     }
 
     pub async fn create_build(&self, id: &str) {
@@ -39,7 +38,10 @@ impl AppState {
         &self.builds
     }
 
-    pub async fn create_git_directory_if_not_exists(&self, context: &BuildContext) -> Result<()> {
+    pub async fn create_git_directory_if_not_exists(
+        &self,
+        context: &WorkspaceContext,
+    ) -> Result<()> {
         let path = std::path::Path::new(&context.repo_dir);
         if path.exists() {
             return Ok(());
@@ -51,7 +53,7 @@ impl AppState {
             &context.id,
             &format!("Cloning {} into {}", context.repo_url, context.repo_dir),
         )
-        .await?;
+        .await;
 
         let output = Command::new("git")
             .args(["clone", &context.repo_url, &context.repo_dir])

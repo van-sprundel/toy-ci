@@ -1,5 +1,5 @@
 #[derive(Clone)]
-pub struct BuildContext {
+pub struct WorkspaceContext {
     pub id: String,
     pub repo_dir: String,
     pub repo_url: String,

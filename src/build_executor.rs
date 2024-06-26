@@ -1,9 +1,10 @@
+use crate::pipeline::Pipeline;
+
 use crate::app_state::AppState;
-use crate::build_context::BuildContext;
+use crate::workspace_context::WorkspaceContext;
 use crate::Result;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
 
 pub struct BuildExecutor {
     available: AtomicBool,
@@ -20,22 +21,19 @@ impl BuildExecutor {
         self.available.load(Ordering::SeqCst)
     }
 
-    pub async fn run_build(&mut self, state: Arc<AppState>, context: BuildContext) -> Result<()> {
-        tracing::info!("Building from new commit {}", context.id);
+    pub async fn run_build(
+        &mut self,
+        _state: Arc<AppState>,
+        context: WorkspaceContext,
+        pipeline: Pipeline,
+    ) -> Result<()> {
+        tracing::info!("Building from new workspace {}", context.id);
 
         self.available.store(false, Ordering::SeqCst);
 
-        let result = async {
-            // pipeline steps
+        let result = pipeline.run().await;
 
-            // Simulate build time
-            tokio::time::sleep(Duration::from_secs(10)).await;
-
-            Ok(())
-        }
-        .await;
-
-        state.send_log(&context.id, "Finished building!").await?;
+        tracing::info!("Finished building from workspace {}", context.id);
 
         self.available.store(true, Ordering::SeqCst);
 

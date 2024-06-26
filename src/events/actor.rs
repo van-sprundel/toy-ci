@@ -20,16 +20,19 @@ impl Actor {
 
         while let Some(new_build_message) = self.0.recv().await {
             let context = new_build_message.context;
+            let pipeline = new_build_message.pipeline;
 
             'executor: loop {
                 for executor in &executors {
                     let mut executor = executor.lock().await;
 
                     if executor.is_available() {
-                        tracing::trace!("Executor found for build_id: {}", &context.id);
+                        tracing::debug!("Executor found for build_id: {}", &context.id);
 
                         // we ignore errors here so it can safely stop the loop
-                        let _ = executor.run_build(state.clone(), context.clone()).await;
+                        let _ = executor
+                            .run_build(state.clone(), context.clone(), pipeline.clone())
+                            .await;
 
                         break 'executor;
                     }
