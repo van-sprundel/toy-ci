@@ -10,16 +10,17 @@ use crate::prelude::LOGS_DIR;
 use crate::Result;
 
 pub async fn build_sse_handler(
-    Path(workspace_id): Path<String>,
+    Path(build_id): Path<String>,
     Extension(state): Extension<Arc<AppState>>,
 ) -> Sse<impl Stream<Item = Result<Event>>> {
     tracing::info!("Receiving sse event");
 
     let (rx, mut previous_logs) = {
-        let workspaces = state.get_workspaces();
-        if let Some(workspace) = workspaces.lock().await.get(&workspace_id) {
-            let rx = workspace.channel.0.subscribe();
-            let previous_logs = workspace.logs.clone();
+        let builds = state.get_builds();
+        if let Some(build) = builds.lock().await.get(&build_id) {
+            let rx = build.channel.0.subscribe();
+            let previous_logs = build.logs.clone();
+            tracing::trace!("Adding logs from active build");
 
             (Some(rx), previous_logs)
         } else {
@@ -28,10 +29,14 @@ pub async fn build_sse_handler(
     };
 
     // check for log file and add contents to previous_logs if it exists
-    let log_path = format!("{}/{}-logs.txt", LOGS_DIR, workspace_id);
+    let log_path = format!("{}/{}-logs.txt", LOGS_DIR, build_id);
+    tracing::trace!("Checking logs file {log_path}");
     if std::path::Path::new(&log_path).exists() {
         match std::fs::read_to_string(&log_path) {
-            Ok(contents) => previous_logs.push(contents),
+            Ok(contents) => {
+                tracing::trace!("Adding logs from log file");
+                previous_logs.push(contents);
+            }
             Err(e) => {
                 tracing::error!("Failed to read log file: {}", e);
             }

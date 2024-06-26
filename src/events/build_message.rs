@@ -1,6 +1,6 @@
 use crate::pipeline::Pipeline;
 
-use crate::workspace_context::WorkspaceContext;
+use crate::workspace_context::BuildContext;
 pub enum BuildMessage {
     NewBuild(NewBuildMessage),
     CancelBuild(CancelBuildMessage),
@@ -8,7 +8,7 @@ pub enum BuildMessage {
 
 #[derive(Clone)]
 pub struct NewBuildMessage {
-    pub context: WorkspaceContext,
+    pub context: BuildContext,
     pub pipeline: Pipeline,
 }
 

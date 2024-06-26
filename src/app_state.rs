@@ -4,7 +4,7 @@ use futures::lock::Mutex;
 use tokio::process::Command;
 
 use crate::running_build::RunningBuild;
-use crate::workspace_context::WorkspaceContext;
+use crate::workspace_context::BuildContext;
 use crate::Result;
 
 #[derive(Default)]
@@ -13,10 +13,10 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub async fn send_log(&self, workspace_id: &str, message: &str) {
+    pub async fn send_log(&self, build_id: &str, message: &str) {
         let mut build_progress_channel_map = self.builds.lock().await;
 
-        if let Some(build) = build_progress_channel_map.get_mut(workspace_id) {
+        if let Some(build) = build_progress_channel_map.get_mut(build_id) {
             let (tx, _) = &build.channel;
             tx.send(message.to_string())
                 .expect("Cant send message to channel");
@@ -34,7 +34,7 @@ impl AppState {
             .insert(id.to_string(), RunningBuild::new(id, (tx, rx)));
     }
 
-    pub fn get_workspaces(&self) -> &Mutex<HashMap<String, RunningBuild>> {
+    pub fn get_builds(&self) -> &Mutex<HashMap<String, RunningBuild>> {
         &self.builds
     }
 
@@ -45,7 +45,7 @@ impl AppState {
 
     pub async fn create_git_directory_if_not_exists(
         &self,
-        context: &WorkspaceContext,
+        context: &BuildContext,
     ) -> Result<()> {
         let path = std::path::Path::new(&context.repo_dir);
         if path.exists() {

@@ -6,7 +6,6 @@ use uuid::Uuid;
 use crate::app_state::AppState;
 use crate::command::run_command;
 use crate::webhook_payloads::github::GithubPushWebhookPayload;
-use crate::{MerelError, Result};
 use crate::{
     events::{
         actor::ActorHandler,
@@ -14,11 +13,12 @@ use crate::{
     },
     git::commit::Commit,
     pipeline::Pipeline,
-    workspace_context::WorkspaceContext,
+    workspace_context::BuildContext,
 };
+use crate::{MerelError, Result};
 
 pub async fn workspace_build_handler(
-    Path(_workspace_id): Path<String>,
+    Path(workspace_id): Path<String>,
     Extension(build_queue): Extension<ActorHandler>,
     Extension(state): Extension<Arc<AppState>>,
     Json(payload): Json<GithubPushWebhookPayload>,
@@ -27,27 +27,29 @@ pub async fn workspace_build_handler(
 
     for commit in &payload.commits {
         let commit: Commit = commit.clone().into();
-        process_commit(&build_queue, &state, &payload, commit).await;
+        process_commit(&*workspace_id, &build_queue, &state, &payload, commit).await;
     }
 
     Json(())
 }
 
 async fn process_commit(
+    workspace_id: &str,
     build_queue: &ActorHandler,
     state: &Arc<AppState>,
     payload: &GithubPushWebhookPayload,
     commit: Commit,
 ) {
-    let workspace_id = Uuid::new_v4().to_string();
-    tracing::info!("Workspace {workspace_id} created");
+    let build_id = Uuid::new_v4().to_string();
+    tracing::info!("Build {build_id} created");
 
     let repository_name = payload.repository.name.clone();
     let url = payload.repository.url.clone();
     let repo_dir = format!("/tmp/merel/repositories/{}-{}", repository_name, commit.id);
 
-    let context = WorkspaceContext {
-        id: workspace_id.clone(),
+    let context = BuildContext {
+        id: build_id.clone(),
+        workspace_id: workspace_id.to_string(),
         commit_id: commit.id,
         repo_url: url,
         repo_dir,
@@ -55,7 +57,7 @@ async fn process_commit(
 
     let output = state.create_git_directory_if_not_exists(&context).await;
     if let Err(e) = output {
-        state.send_log(&workspace_id, &e.to_string()).await;
+        state.send_log(&build_id, &e.to_string()).await;
 
         let span = tracing::error_span!("Can't create git repository");
         span.in_scope(|| {
@@ -68,14 +70,14 @@ async fn process_commit(
     // checkout git
     let checkout = run_command(
         state,
-        &workspace_id.to_string(),
+        &build_id.to_string(),
         "git",
         Some(vec!["checkout", &context.commit_id]),
         Some(&context.repo_dir),
     )
     .await;
     if let Err(e) = checkout {
-        state.send_log(&workspace_id, &e.to_string()).await;
+        state.send_log(&build_id, &e.to_string()).await;
 
         let span = tracing::error_span!("Can't checkout repository");
         span.in_scope(|| {
@@ -89,7 +91,7 @@ async fn process_commit(
     let pipeline = match get_pipeline(&context).await {
         Ok(v) => v,
         Err(e) => {
-            state.send_log(&workspace_id, &e.to_string()).await;
+            state.send_log(&build_id, &e.to_string()).await;
 
             let span = tracing::error_span!("Can't retrieve pipeline");
             span.in_scope(|| {
@@ -112,7 +114,7 @@ async fn process_commit(
     let _ = build_queue.send(BuildMessage::NewBuild(message)).await;
 }
 
-async fn get_pipeline(context: &WorkspaceContext) -> Result<Pipeline> {
+async fn get_pipeline(context: &BuildContext) -> Result<Pipeline> {
     let repo_dir = &context.repo_dir;
     let path = std::path::Path::new(&repo_dir.clone()).join("merel.yaml");
 

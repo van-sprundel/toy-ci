@@ -5,12 +5,9 @@ import NavLink from '@/components/ui/NavLink.vue'
 
 <template>
     <header>
-        <div class="wrapper">
-            <nav>
-                <NavLink to="/">Dashboard</NavLink>
-            </nav>
-        </div>
+        <nav class="flex items-center gap-2 text-sm font-medium">
+            <NavLink to="/">Dashboard</NavLink>
+        </nav>
     </header>
     <RouterView />
 </template>
-

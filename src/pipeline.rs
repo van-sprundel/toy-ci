@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::app_state::AppState;
 use crate::job::Job;
-use crate::workspace_context::WorkspaceContext;
+use crate::workspace_context::BuildContext;
 
 #[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 pub struct Pipeline {
@@ -26,7 +26,7 @@ impl Pipeline {
     pub async fn run(
         &self,
         state: &Arc<AppState>,
-        context: &WorkspaceContext,
+        context: &BuildContext,
         cancel_flag: Arc<AtomicBool>,
     ) -> PipelineStatus {
         for job in self.jobs.values() {

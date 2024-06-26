@@ -1,7 +1,7 @@
 use crate::pipeline::{Pipeline, PipelineStatus};
 
 use crate::app_state::AppState;
-use crate::workspace_context::WorkspaceContext;
+use crate::workspace_context::BuildContext;
 use crate::Result;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -32,7 +32,7 @@ impl BuildExecutor {
     pub async fn run_build(
         &mut self,
         state: Arc<AppState>,
-        context: WorkspaceContext,
+        context: BuildContext,
         pipeline: Pipeline,
     ) -> Result<PipelineStatus> {
         tracing::info!("Building from new workspace {}", &context.id);

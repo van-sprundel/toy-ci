@@ -16,6 +16,7 @@ mod workspace_context;
 use std::sync::Arc;
 
 use app_state::AppState;
+use axum::http::{HeaderValue, Method};
 use axum::Extension;
 use axum::{
     routing::{get, post, put},
@@ -28,6 +29,7 @@ use handlers::*;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 use tokio::sync::{mpsc::Receiver, mpsc::Sender};
+use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -49,6 +51,11 @@ async fn main() -> Result<()> {
         .route(
             "/workspaces/:workspace_id/build",
             post(workspace_build_handler),
+        )
+        .layer(
+            CorsLayer::new()
+                .allow_origin("http://127.0.0.1:5173".parse::<HeaderValue>().unwrap())
+                .allow_methods([Method::GET]),
         )
         .layer(Extension(app_state.clone()))
         .layer(Extension(build_queue))

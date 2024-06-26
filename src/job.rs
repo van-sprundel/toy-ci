@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::app_state::AppState;
 use crate::prelude::*;
 use crate::step::Step;
-use crate::workspace_context::WorkspaceContext;
+use crate::workspace_context::BuildContext;
 use crate::Result;
 
 #[derive(Debug, Clone, PartialEq, serde::Deserialize)]
@@ -13,7 +13,7 @@ pub struct Job {
 }
 
 impl Job {
-    pub async fn run(&self, state: &Arc<AppState>, context: &WorkspaceContext) -> Result<()> {
+    pub async fn run(&self, state: &Arc<AppState>, context: &BuildContext) -> Result<()> {
         for step in &self.steps {
             let command_log = format!("run: {step}");
             state.send_log(&context.id, &command_log).await;
