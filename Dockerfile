@@ -3,10 +3,10 @@ WORKDIR /app
 
 COPY . /app
 
-RUN cargo build --release
+RUN cargo build
 
 FROM gcr.io/distroless/cc-debian12 as run
-COPY --from=build /app/target/release/merel /
+COPY --from=build /app/target/debug/merel /
 
 EXPOSE 3000
 
