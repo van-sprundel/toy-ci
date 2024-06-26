@@ -1,7 +1,6 @@
-use crate::error::MerelError;
-use crate::error::Result;
 use std::sync::Arc;
-use tokio::process::Command as TokioCommand;
+
+use crate::prelude::*;
 
 use crate::app_state::AppState;
 
@@ -12,7 +11,7 @@ pub async fn run_command(
     command_args: Option<Vec<&str>>,
     directory: Option<&str>,
 ) -> Result<()> {
-    let mut c = TokioCommand::new(command);
+    let mut c = Command::new(command);
 
     if let Some(args) = command_args {
         c.args(args);

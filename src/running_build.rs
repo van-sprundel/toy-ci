@@ -1,7 +1,5 @@
-use crate::Result;
+use crate::{prelude::LOGS_DIR, Result};
 use tokio::sync::broadcast;
-
-const LOGS_DIR: &'static str = "/tmp/merel/logs";
 
 type Channel = (broadcast::Sender<String>, broadcast::Receiver<String>);
 

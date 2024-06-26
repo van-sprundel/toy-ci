@@ -6,6 +6,7 @@ mod events;
 mod git;
 mod job;
 mod pipeline;
+mod prelude;
 mod running_build;
 mod step;
 mod webhook_payloads;
@@ -19,12 +20,13 @@ use axum::routing::get;
 use axum::{routing::post, Router};
 use axum::{Extension, Json};
 use command::run_command;
-use error::{MerelError, Result};
+pub use error::*;
 use events::actor::{Actor, ActorHandler};
 use events::new_build_message::NewBuildMessage;
 use futures::stream::Stream;
 use git::commit::Commit;
 use pipeline::Pipeline;
+use prelude::LOGS_DIR;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
@@ -41,7 +43,7 @@ async fn sse_handler(
 ) -> Sse<impl Stream<Item = Result<Event>>> {
     tracing::info!("Receiving sse event");
 
-    let (rx, previous_logs) = {
+    let (rx, mut previous_logs) = {
         let workspaces = state.get_workspace();
         if let Some(workspace) = workspaces.lock().await.get(&workspace_id) {
             let rx = workspace.channel.0.subscribe();
@@ -52,6 +54,17 @@ async fn sse_handler(
             (None, vec![])
         }
     };
+
+    // check for log file and add contents to previous_logs if it exists
+    let log_path = format!("{}/{}-logs.txt", LOGS_DIR, workspace_id);
+    if std::path::Path::new(&log_path).exists() {
+        match std::fs::read_to_string(&log_path) {
+            Ok(contents) => previous_logs.push(contents),
+            Err(e) => {
+                tracing::error!("Failed to read log file: {}", e);
+            }
+        }
+    }
 
     let stream = async_stream::stream! {
         for log in previous_logs {
