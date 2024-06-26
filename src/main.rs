@@ -5,9 +5,9 @@ mod error;
 mod events;
 mod git;
 mod job;
-mod step;
 mod pipeline;
 mod running_build;
+mod step;
 mod webhook_payloads;
 mod workspace_context;
 
@@ -29,6 +29,7 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 use tokio::sync::{mpsc::Receiver, mpsc::Sender};
+use tower_http::services::ServeDir;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use uuid::Uuid;
 use webhook_payloads::github::GithubPushWebhookPayload;
@@ -192,12 +193,14 @@ async fn main() -> Result<()> {
     let build_queue = ActorHandler::new(tx);
 
     let app_state = Arc::new(AppState::default());
+    let static_files = ServeDir::new("dist");
 
     let app = Router::new()
         .route("/sse/:build_id", get(sse_handler))
         .route("/build", post(webhook_handler))
         .layer(Extension(app_state.clone()))
-        .layer(Extension(build_queue));
+        .layer(Extension(build_queue))
+        .fallback_service(static_files.clone());
 
     let scheduler = tokio::spawn(async move {
         Actor::new(rx).build_scheduler(app_state).await;

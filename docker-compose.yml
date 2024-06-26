@@ -1,0 +1,23 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - frontend
+    volumes:
+      - .:/app
+      - /app/target
+
+  frontend:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./dashboard:/app
+    environment:
+      - CHOKIDAR_USEPOLLING=true
